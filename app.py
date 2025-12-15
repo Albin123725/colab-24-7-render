@@ -1,6 +1,6 @@
 """
-🚀 COLAB 24/7 - RENDER HOSTED BROWSER
-Simplified version - no image dependencies
+🚀 COLAB 24/7 - SIMPLE KEEP-ALIVE
+Uses HTTP requests to ping Colab and keep it alive
 """
 
 import os
@@ -23,25 +23,21 @@ logger = logging.getLogger(__name__)
 # Your Colab URL
 COLAB_URL = os.environ.get('COLAB_URL', 'https://colab.research.google.com/drive/1jckV8xUJSmLhhol6wZwVJzpybsimiRw1')
 
-# Browserless API - USING YOUR TOKEN!
-BROWSERLESS_TOKEN = "2TblDXmlzjAZKPE6ae95231b83bb3c4112c62fce83c993b43"
-BROWSERLESS_API = "https://chrome.browserless.io"
-
 # Global variables
-session_id = None
-session_active = False
+monitoring = True
 stats = {
-    'browser_sessions': 0,
-    'colab_pings': 0,
-    'auto_clicks': 0,
-    'last_action': None
+    'total_pings': 0,
+    'successful_pings': 0,
+    'failed_pings': 0,
+    'last_ping': None,
+    'last_status': None
 }
 
 HTML = '''
 <!DOCTYPE html>
 <html>
 <head>
-    <title>🚀 Colab 24/7 Virtual Browser</title>
+    <title>🚀 Colab 24/7 Keep-Alive</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body { 
@@ -50,18 +46,31 @@ HTML = '''
             margin: 0; padding: 20px; min-height: 100vh;
         }
         .container {
-            max-width: 1200px; margin: 0 auto; background: white;
+            max-width: 800px; margin: 0 auto; background: white;
             border-radius: 15px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
         .header { text-align: center; margin-bottom: 30px; }
-        .header h1 { color: #333; margin: 0; }
+        .header h1 { color: #333; margin: 0; font-size: 2em; }
         .status-box {
             background: #f8f9fa; padding: 20px; border-radius: 10px;
-            margin: 20px 0; border-left: 5px solid #4285f4;
+            margin: 20px 0; border-left: 5px solid #34a853;
         }
+        .stats {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); 
+            gap: 15px; margin: 20px 0;
+        }
+        .stat-card { 
+            background: white; padding: 15px; border-radius: 8px; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center;
+        }
+        .stat-number { 
+            font-size: 24px; font-weight: bold; color: #4285f4; 
+            margin-bottom: 5px;
+        }
+        .stat-label { color: #666; font-size: 14px; }
         .controls {
-            display: flex; gap: 10px; margin: 20px 0;
-            flex-wrap: wrap; justify-content: center;
+            display: flex; gap: 10px; margin: 30px 0;
+            justify-content: center; flex-wrap: wrap;
         }
         button {
             padding: 12px 24px; border: none; border-radius: 8px;
@@ -69,283 +78,294 @@ HTML = '''
             font-weight: bold; transition: all 0.3s;
         }
         button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
-        .btn-start { background: #34a853; }
-        .btn-stop { background: #ea4335; }
-        .btn-click { background: #fbbc05; color: #333; }
-        .browser-frame {
-            width: 100%; height: 600px; border: 2px solid #ddd;
-            border-radius: 10px; overflow: hidden; margin: 20px 0;
-        }
-        iframe { width: 100%; height: 100%; border: none; }
+        .btn-success { background: #34a853; }
+        .btn-warning { background: #fbbc05; color: #333; }
+        .btn-danger { background: #ea4335; }
         .logs {
             background: #1e1e1e; color: #00ff00; padding: 15px;
-            border-radius: 10px; font-family: monospace;
-            max-height: 200px; overflow-y: auto;
+            border-radius: 10px; font-family: 'Courier New', monospace;
+            max-height: 200px; overflow-y: auto; margin-top: 20px;
+            font-size: 14px;
         }
-        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin: 20px 0; }
-        .stat-card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; }
-        .stat-number { font-size: 24px; font-weight: bold; color: #4285f4; }
+        .info-box {
+            background: #e8f4fd; border: 2px solid #b6e0ff;
+            border-radius: 10px; padding: 15px; margin: 20px 0;
+        }
+        .url-display {
+            background: #f1f3f4; padding: 10px; border-radius: 5px;
+            margin: 10px 0; word-break: break-all; font-size: 14px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🚀 Colab 24/7 Virtual Browser</h1>
-            <p>Your Colab runs in cloud browser - Works when laptop is closed!</p>
+            <h1>🚀 Colab 24/7 Keep-Alive</h1>
+            <p>Keeps your Colab session active 24/7</p>
+        </div>
+        
+        <div class="info-box">
+            <strong>📢 How it works:</strong> This service pings your Colab URL every 5 minutes 
+            to reset the inactivity timer. Colab stays connected even when you close your laptop!
         </div>
         
         <div class="status-box">
-            <h3>Status: <span id="statusText" style="color: #ea4335;">INACTIVE</span></h3>
-            <p>Session ID: <span id="sessionId">None</span></p>
-            <p>Last Action: <span id="lastAction">Never</span></p>
+            <h3>Service Status: <span id="statusText" style="color: #34a853;">RUNNING</span></h3>
+            <div class="url-display">
+                <strong>Monitoring:</strong><br>
+                <span id="colabUrl">''' + COLAB_URL + '''</span>
+            </div>
+            <p>Last Ping: <span id="lastPing">Never</span></p>
+            <p>Last Status: <span id="lastStatus">-</span></p>
         </div>
         
         <div class="stats">
             <div class="stat-card">
-                <div class="stat-number" id="sessions">0</div>
-                <div>Sessions</div>
+                <div class="stat-number" id="totalPings">0</div>
+                <div class="stat-label">Total Pings</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number" id="pings">0</div>
-                <div>Pings</div>
+                <div class="stat-number" id="successPings">0</div>
+                <div class="stat-label">Successful</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number" id="clicks">0</div>
-                <div>Auto-Clicks</div>
+                <div class="stat-number" id="failedPings">0</div>
+                <div class="stat-label">Failed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="uptime">00:00:00</div>
+                <div class="stat-label">Uptime</div>
             </div>
         </div>
         
         <div class="controls">
-            <button class="btn-start" onclick="startBrowser()">🚀 Start Browser</button>
-            <button class="btn-click" onclick="autoClick()">🤖 Auto-Click</button>
-            <button onclick="restartSession()">🔄 Restart</button>
-            <button onclick="location.reload()">↻ Refresh</button>
+            <button class="btn-success" onclick="forcePing()">📡 Force Ping Now</button>
+            <button class="btn-warning" onclick="restartService()">🔄 Restart Service</button>
+            <button onclick="location.reload()">↻ Refresh Page</button>
+            <button class="btn-danger" onclick="toggleMonitoring()">⏸️ Pause</button>
         </div>
         
-        <div class="browser-frame">
-            <iframe id="colabFrame" src="about:blank" title="Colab Virtual Browser"></iframe>
+        <div>
+            <h3>Live Logs:</h3>
+            <div class="logs" id="logs">
+                [Logs will appear here...]
+            </div>
         </div>
         
-        <div class="logs" id="logs">
-            [Logs will appear here...]
+        <div style="text-align: center; margin-top: 20px; color: #666; font-size: 12px;">
+            Service started: <span id="startTime">Loading...</span>
         </div>
     </div>
     
     <script>
-        function startBrowser() {
-            showLog('🚀 Starting virtual browser...');
-            fetch('/start_browser')
+        let monitoring = true;
+        let startTimestamp = Date.now();
+        
+        function forcePing() {
+            fetch('/ping')
                 .then(r => r.json())
                 .then(data => {
-                    if (data.success) {
-                        document.getElementById('colabFrame').src = data.view_url;
-                        document.getElementById('statusText').textContent = 'ACTIVE';
-                        document.getElementById('statusText').style.color = '#34a853';
-                        document.getElementById('sessionId').textContent = data.session_id;
-                        showLog('✅ Browser started: ' + data.session_id);
-                        
-                        // Start auto-ping
-                        startAutoPing();
-                    } else {
-                        showLog('❌ Error: ' + data.error);
-                        alert('Error: ' + data.error);
-                    }
-                })
-                .catch(err => {
-                    showLog('❌ Failed: ' + err);
-                    alert('Failed: ' + err);
+                    addLog(`📡 Manual ping: ${data.status}`);
+                    updateStats();
                 });
         }
         
-        function autoClick() {
-            fetch('/auto_click')
-                .then(r => r.json())
-                .then(data => {
-                    showLog('🤖 ' + data.message);
-                });
-        }
-        
-        function restartSession() {
-            if (confirm('Restart browser session?')) {
-                fetch('/restart_session')
-                    .then(() => {
-                        setTimeout(startBrowser, 2000);
+        function restartService() {
+            if (confirm('Restart monitoring service?')) {
+                fetch('/restart')
+                    .then(r => r.json())
+                    .then(data => {
+                        addLog('🔄 Service restarted');
+                        setTimeout(updateStats, 1000);
                     });
             }
         }
         
-        function startAutoPing() {
-            // Auto-ping every 30 seconds
-            setInterval(() => {
-                fetch('/ping');
-            }, 30000);
-            
-            // Auto-click every 5 minutes
-            setInterval(() => {
-                autoClick();
-            }, 300000);
+        function toggleMonitoring() {
+            monitoring = !monitoring;
+            const btn = document.querySelector('.btn-danger');
+            if (monitoring) {
+                btn.textContent = '⏸️ Pause';
+                btn.className = 'btn-danger';
+                addLog('▶️ Monitoring resumed');
+            } else {
+                btn.textContent = '▶️ Resume';
+                btn.className = 'btn-success';
+                addLog('⏸️ Monitoring paused');
+            }
         }
         
-        function showLog(message) {
+        function addLog(message) {
             const logs = document.getElementById('logs');
             const time = new Date().toLocaleTimeString();
-            logs.innerHTML = '[' + time + '] ' + message + '<br>' + logs.innerHTML;
+            const logEntry = `<div>[${time}] ${message}</div>`;
+            logs.innerHTML = logEntry + logs.innerHTML;
+            
+            // Keep only last 20 logs
+            const logDivs = logs.querySelectorAll('div');
+            if (logDivs.length > 20) {
+                for (let i = 20; i < logDivs.length; i++) {
+                    logDivs[i].remove();
+                }
+            }
+            
+            logs.scrollTop = 0;
         }
         
-        // Auto-start on page load
-        window.onload = function() {
-            setTimeout(startBrowser, 1000);
-        };
-        
-        // Update stats every 3 seconds
-        setInterval(() => {
+        function updateStats() {
             fetch('/status')
                 .then(r => r.json())
                 .then(data => {
-                    document.getElementById('sessions').textContent = data.stats.browser_sessions;
-                    document.getElementById('pings').textContent = data.stats.colab_pings;
-                    document.getElementById('clicks').textContent = data.stats.auto_clicks;
-                    document.getElementById('lastAction').textContent = data.stats.last_action || 'Never';
+                    document.getElementById('totalPings').textContent = data.stats.total_pings;
+                    document.getElementById('successPings').textContent = data.stats.successful_pings;
+                    document.getElementById('failedPings').textContent = data.stats.failed_pings;
+                    document.getElementById('lastPing').textContent = data.stats.last_ping || 'Never';
+                    document.getElementById('lastStatus').textContent = data.stats.last_status || '-';
+                    document.getElementById('colabUrl').textContent = data.colab_url;
+                    document.getElementById('startTime').textContent = new Date(data.start_time * 1000).toLocaleString();
+                    
+                    // Update uptime
+                    const uptimeSeconds = Math.floor((Date.now() - startTimestamp) / 1000);
+                    document.getElementById('uptime').textContent = formatTime(uptimeSeconds);
                 });
-        }, 3000);
+        }
+        
+        function formatTime(seconds) {
+            const hrs = Math.floor(seconds / 3600);
+            const mins = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        // Auto-update every 3 seconds
+        setInterval(updateStats, 3000);
+        
+        // Initial update
+        setTimeout(updateStats, 1000);
+        
+        // Add initial log
+        addLog('🚀 Service started. Pinging Colab every 5 minutes...');
     </script>
 </body>
 </html>
 '''
 
-def start_virtual_browser():
-    """Start virtual browser session"""
-    global session_id, session_active, stats
-    
-    try:
-        url = f"{BROWSERLESS_API}/content?token={BROWSERLESS_TOKEN}"
-        payload = {
-            "url": COLAB_URL,
-            "gotoOptions": {"timeout": 30000},
-            "setViewport": {"width": 1920, "height": 1080},
-            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
-        
-        response = requests.post(url, json=payload, timeout=30)
-        
-        if response.status_code == 200:
-            data = response.json()
-            session_id = data.get('id', f'session_{int(time.time())}')
-            session_active = True
-            
-            stats['browser_sessions'] += 1
-            stats['last_action'] = f"Started at {datetime.now().strftime('%H:%M:%S')}"
-            
-            logger.info(f"✅ Browser started: {session_id}")
-            
-            # Start maintenance
-            Thread(target=auto_maintenance, daemon=True).start()
-            
-            return {
-                "success": True,
-                "session_id": session_id,
-                "view_url": f"https://chrome.browserless.io/session/{session_id}"
-            }
-        else:
-            error = f"API Error: {response.status_code}"
-            logger.error(f"❌ {error}")
-            return {"success": False, "error": error}
-            
-    except Exception as e:
-        error = f"Exception: {str(e)}"
-        logger.error(f"❌ {error}")
-        return {"success": False, "error": error}
-
-def auto_maintenance():
-    """Auto-maintenance for session"""
+def ping_colab():
+    """Ping Colab to keep session alive"""
     global stats
     
-    while session_active:
-        time.sleep(30)
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0'
+        }
         
-        # Ping to keep alive
+        response = requests.get(COLAB_URL, headers=headers, timeout=15, allow_redirects=True)
+        
+        stats['total_pings'] += 1
+        stats['successful_pings'] += 1
+        stats['last_ping'] = datetime.now().strftime("%H:%M:%S")
+        stats['last_status'] = f"HTTP {response.status_code}"
+        
+        if response.status_code == 200:
+            logger.info(f"✅ Ping successful: {response.status_code}")
+            return {"status": "success", "code": response.status_code}
+        else:
+            logger.warning(f"⚠️ Ping status: {response.status_code}")
+            return {"status": "warning", "code": response.status_code}
+            
+    except requests.exceptions.Timeout:
+        stats['total_pings'] += 1
+        stats['failed_pings'] += 1
+        stats['last_ping'] = datetime.now().strftime("%H:%M:%S")
+        stats['last_status'] = "Timeout"
+        logger.warning("⏰ Request timeout")
+        return {"status": "timeout"}
+        
+    except requests.exceptions.ConnectionError:
+        stats['total_pings'] += 1
+        stats['failed_pings'] += 1
+        stats['last_ping'] = datetime.now().strftime("%H:%M:%S")
+        stats['last_status'] = "Connection Error"
+        logger.warning("🔌 Connection error")
+        return {"status": "connection_error"}
+        
+    except Exception as e:
+        stats['total_pings'] += 1
+        stats['failed_pings'] += 1
+        stats['last_ping'] = datetime.now().strftime("%H:%M:%S")
+        stats['last_status'] = str(e)[:50]
+        logger.error(f"❌ Ping error: {e}")
+        return {"status": "error", "message": str(e)}
+
+def keep_alive_worker():
+    """Worker that pings Colab regularly"""
+    global monitoring
+    
+    logger.info("🚀 Starting Colab keep-alive service")
+    ping_count = 0
+    
+    while monitoring:
         try:
-            stats['colab_pings'] += 1
-            logger.info(f"📡 Ping #{stats['colab_pings']}")
-        except:
-            pass
-        
-        # Auto-click every 5 minutes
-        if stats['colab_pings'] % 10 == 0:
-            auto_click()
-
-def auto_click():
-    """Auto-click reconnect"""
-    global stats
-    
-    try:
-        url = f"{BROWSERLESS_API}/execute?token={BROWSERLESS_TOKEN}"
-        script = """
-        function clickButtons() {
-            let reconnect = document.querySelector('[aria-label="Reconnect"], [aria-label="Connect"]');
-            if (reconnect) {
-                reconnect.click();
-                setTimeout(() => {
-                    let runBtn = document.querySelector('[aria-label="Run all"]');
-                    if (runBtn) runBtn.click();
-                }, 5000);
-                return 'clicked_reconnect';
-            }
-            return 'no_buttons';
-        }
-        return clickButtons();
-        """
-        
-        payload = {"code": script}
-        if session_id:
-            payload["sessionId"] = session_id
-        
-        response = requests.post(url, json=payload, timeout=30)
-        
-        if response.status_code == 200:
-            stats['auto_clicks'] += 1
-            stats['last_action'] = f"Auto-click at {datetime.now().strftime('%H:%M:%S')}"
-            logger.info(f"✅ Auto-click #{stats['auto_clicks']}")
-            return {"success": True, "message": "Auto-click performed"}
-        else:
-            return {"success": False, "message": "Click failed"}
+            ping_count += 1
+            result = ping_colab()
             
-    except Exception as e:
-        logger.error(f"❌ Auto-click error: {e}")
-        return {"success": False, "message": f"Error: {str(e)}"}
+            # Adjust interval based on result
+            if result['status'] == 'success':
+                wait_time = 300  # 5 minutes if successful
+                logger.info(f"📊 Ping #{ping_count}: Success. Next in {wait_time//60} min")
+            else:
+                wait_time = 60  # 1 minute if failed
+                logger.warning(f"📊 Ping #{ping_count}: {result['status']}. Retry in 1 min")
+            
+            # Wait for next ping
+            for _ in range(wait_time // 10):
+                if not monitoring:
+                    break
+                time.sleep(10)
+                
+        except Exception as e:
+            logger.error(f"Worker error: {e}")
+            time.sleep(30)
 
-# Flask Routes
 @app.route('/')
 def index():
     return render_template_string(HTML)
 
-@app.route('/start_browser')
-def start_browser():
-    return jsonify(start_virtual_browser())
-
-@app.route('/auto_click')
-def perform_auto_click():
-    return jsonify(auto_click())
-
-@app.route('/restart_session')
-def restart_session():
-    global session_active
-    session_active = False
-    time.sleep(2)
-    return jsonify({"success": True, "message": "Session restarted"})
-
 @app.route('/ping')
 def ping():
-    stats['colab_pings'] += 1
-    return jsonify({"success": True, "ping": stats['colab_pings']})
+    """Manual ping endpoint"""
+    result = ping_colab()
+    return jsonify(result)
+
+@app.route('/restart')
+def restart():
+    """Restart monitoring"""
+    global monitoring
+    monitoring = False
+    time.sleep(2)
+    monitoring = True
+    Thread(target=keep_alive_worker, daemon=True).start()
+    return jsonify({"status": "restarted"})
 
 @app.route('/status')
 def status():
     return jsonify({
-        'status': 'active' if session_active else 'inactive',
-        'session_id': session_id,
+        'status': 'running' if monitoring else 'stopped',
+        'colab_url': COLAB_URL,
         'stats': stats,
-        'colab_url': COLAB_URL
+        'start_time': time.time() - 5,  # Approximate start time
+        'timestamp': datetime.now().isoformat()
     })
 
 @app.route('/health')
@@ -353,21 +373,17 @@ def health():
     return jsonify({"status": "healthy"})
 
 if __name__ == '__main__':
-    logger.info("=" * 60)
-    logger.info("🚀 COLAB 24/7 VIRTUAL BROWSER")
-    logger.info("=" * 60)
-    logger.info(f"📌 Colab: {COLAB_URL}")
-    logger.info("⚡ Starting in 3 seconds...")
+    # Start monitoring automatically
+    monitoring = True
+    worker_thread = Thread(target=keep_alive_worker, daemon=True)
+    worker_thread.start()
     
-    # Auto-start browser
-    def auto_start():
-        result = start_virtual_browser()
-        if result.get('success'):
-            logger.info(f"✅ Browser started: {result.get('session_id')}")
-        else:
-            logger.error(f"❌ Failed: {result.get('error')}")
-    
-    Timer(3, auto_start).start()
+    logger.info("=" * 60)
+    logger.info("🚀 COLAB 24/7 KEEP-ALIVE SERVICE")
+    logger.info("=" * 60)
+    logger.info(f"📌 Monitoring: {COLAB_URL}")
+    logger.info("⏰ Pinging every 5 minutes")
+    logger.info("✅ Service started")
     
     port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
