@@ -2,4 +2,5 @@ flask==2.3.3
 selenium==4.15.2
 undetected-chromedriver==3.5.4
 requests==2.31.0
-packaging==23.2  # Replaces distutils
+packaging==23.2
+webdriver-manager==4.0.1  # ADD THIS LINE
