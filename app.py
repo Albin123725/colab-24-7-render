@@ -437,7 +437,10 @@ def init_browser(headless=True):
     try:
         logger.info("Initializing browser...")
         
-        options = uc.ChromeOptions()
+        if USE_UNDETECTED:
+            options = uc.ChromeOptions()
+        else:
+            options = Options()
         
         # Essential for Render
         options.add_argument('--no-sandbox')
@@ -451,8 +454,10 @@ def init_browser(headless=True):
         # Stealth settings
         options.add_argument('--disable-blink-features=AutomationControlled')
         options.add_argument('--disable-features=VizDisplayCompositor')
-        options.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
-        options.add_experimental_option('useAutomationExtension', False)
+        
+        if USE_UNDETECTED:
+            options.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
+            options.add_experimental_option('useAutomationExtension', False)
         
         # User agents
         user_agents = [
@@ -476,30 +481,40 @@ def init_browser(headless=True):
         options.add_argument('--disable-sync')
         
         # Create driver
-        driver = uc.Chrome(
-            options=options,
-            version_main=120  # Use Chrome 120
-        )
+        if USE_UNDETECTED:
+            driver = uc.Chrome(
+                options=options,
+                version_main=120  # Use Chrome 120
+            )
+        else:
+            from selenium.webdriver.chrome.service import Service
+            from webdriver_manager.chrome import ChromeDriverManager
+            
+            service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=options)
         
         # Stealth scripts
-        driver.execute_cdp_cmd('Network.setUserAgentOverride', {
-            "userAgent": options.arguments[-1].split('=')[1] 
-            if 'user-agent' in options.arguments[-1] 
-            else user_agents[0]
-        })
-        
-        driver.execute_script("""
-            Object.defineProperty(navigator, 'webdriver', {
-                get: () => undefined
-            });
+        try:
+            driver.execute_cdp_cmd('Network.setUserAgentOverride', {
+                "userAgent": options.arguments[-1].split('=')[1] 
+                if 'user-agent' in options.arguments[-1] 
+                else user_agents[0]
+            })
             
-            window.chrome = {
-                runtime: {},
-                loadTimes: function() {},
-                csi: function() {},
-                app: {}
-            };
-        """)
+            driver.execute_script("""
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined
+                });
+                
+                window.chrome = {
+                    runtime: {},
+                    loadTimes: function() {},
+                    csi: function() {},
+                    app: {}
+                };
+            """)
+        except:
+            pass
         
         logger.info("✅ Browser initialized successfully")
         return driver
