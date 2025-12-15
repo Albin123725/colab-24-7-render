@@ -7,7 +7,18 @@ import random
 from datetime import datetime
 from threading import Thread, Lock
 from flask import Flask, render_template_string, jsonify, request, send_file
-import undetected_chromedriver as uc
+
+# Try to import undetected_chromedriver, fallback to regular selenium
+try:
+    import undetected_chromedriver as uc
+    USE_UNDETECTED = True
+except ImportError as e:
+    print(f"Warning: undetected_chromedriver not available: {e}")
+    print("Falling back to regular selenium...")
+    USE_UNDETECTED = False
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
