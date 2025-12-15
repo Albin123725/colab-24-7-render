@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: colab-minecraft-24-7
+    env: python
+    region: oregon  # or singapore, frankfurt, ohio
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+      apt-get update && apt-get install -y wget
+    startCommand: python app.py
+    envVars:
+      - key: COLAB_URL
+        value: https://colab.research.google.com/drive/1jckV8xUJSmLhhol6wZwVJzpybsimiRw1
+      - key: PYTHONUNBUFFERED
+        value: true
+      - key: PORT
+        value: 10000
+    plan: free
+    healthCheckPath: /health
+    autoDeploy: true
