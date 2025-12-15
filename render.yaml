@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: colab-minecraft-keeper
+    name: colab-virtual-browser
     env: python
     region: oregon
     buildCommand: pip install -r requirements.txt
@@ -8,10 +8,9 @@ services:
     envVars:
       - key: COLAB_URL
         value: https://colab.research.google.com/drive/1jckV8xUJSmLhhol6wZwVJzpybsimiRw1
+      - key: BROWSERLESS_TOKEN
+        sync: false  # You'll set this manually
       - key: PORT
         value: 10000
-      - key: PYTHONUNBUFFERED
-        value: true
     plan: free
-    healthCheckPath: /health
-    autoDeploy: true
+    healthCheckPath: /keep_alive
