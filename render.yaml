@@ -1,14 +1,17 @@
 services:
   - type: web
-    name: colab-keeper
+    name: colab-minecraft-keeper
     env: python
     region: oregon
     buildCommand: pip install -r requirements.txt
-    startCommand: python app_simple.py
+    startCommand: python app.py
     envVars:
       - key: COLAB_URL
         value: https://colab.research.google.com/drive/1jckV8xUJSmLhhol6wZwVJzpybsimiRw1
       - key: PORT
         value: 10000
+      - key: PYTHONUNBUFFERED
+        value: true
     plan: free
-    healthCheckPath: /status
+    healthCheckPath: /health
+    autoDeploy: true
