@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: colab-24-7-virtual-browser
+    name: colab-virtual-browser
     env: python
     region: oregon
     buildCommand: pip install -r requirements.txt
@@ -10,8 +10,5 @@ services:
         value: https://colab.research.google.com/drive/1jckV8xUJSmLhhol6wZwVJzpybsimiRw1
       - key: PORT
         value: 10000
-      - key: PYTHONUNBUFFERED
-        value: true
     plan: free
-    healthCheckPath: /keep_alive
-    autoDeploy: true
+    healthCheckPath: /health
